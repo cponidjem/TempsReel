@@ -109,6 +109,13 @@ void f_receiveFromMon(void *arg) {
 #endif
 
             }
+        } else if (strcmp(msg.header, HEADER_MTS_CAMERA) == 0){
+            if(msg.data[0] == CAM_OPEN) {
+                rt_sem_v(&sem_openCamera);
+            } else if (msg.data[0] == CAM_CLOSE) {
+                //TODO close camera
+            }
+        
         }
     } while (err > 0);
 
@@ -214,6 +221,34 @@ void f_move(void *arg) {
 #endif            
         }
         rt_mutex_release(&mutex_robotStarted);
+    }
+}
+
+void f_openCamera(void *arg) {
+    int err;
+    
+     /* INIT */
+    RT_TASK_INFO info;
+    rt_task_inquire(NULL, &info);
+    printf("Init %s\n", info.name);
+    rt_sem_p(&sem_barrier, TM_INFINITE);
+    
+    while(1){
+        rt_sem_p(&sem_openCamera, TM_INFINITE);
+        rt_mutex_acquire(&mutex_camera,TM_INFINITE);
+        err = open_camera(&camera);
+        rt_mutex_release(&mutex_camera);
+        if (err == 0){
+            MessageToMon msg;
+            set_msgToMon_header(&msg, HEADER_STM_ACK);
+            write_in_queue(&q_messageToMon, msg);           
+        } else {
+             MessageToMon msg;
+            set_msgToMon_header(&msg, HEADER_STM_NO_ACK);
+            write_in_queue(&q_messageToMon, msg);
+        }
+        
+        
     }
 }
 

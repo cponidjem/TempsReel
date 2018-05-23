@@ -25,6 +25,7 @@ RT_TASK th_receiveFromMon;
 RT_TASK th_openComRobot;
 RT_TASK th_startRobot;
 RT_TASK th_move;
+RT_TASK th_openCamera;
 
 // Déclaration des priorités des taches
 int PRIORITY_TSERVER = 30;
@@ -33,15 +34,18 @@ int PRIORITY_TMOVE = 10;
 int PRIORITY_TSENDTOMON = 25;
 int PRIORITY_TRECEIVEFROMMON = 22;
 int PRIORITY_TSTARTROBOT = 20;
+int PRIORITY_TOPENCAMERA = 20; // TODO define real priority 
 
 RT_MUTEX mutex_robotStarted;
 RT_MUTEX mutex_move;
+RT_MUTEX mutex_camera;
 
 // Déclaration des sémaphores
 RT_SEM sem_barrier;
 RT_SEM sem_openComRobot;
 RT_SEM sem_serverOk;
 RT_SEM sem_startRobot;
+RT_SEM sem_openCamera;
 
 // Déclaration des files de message
 RT_QUEUE q_messageToMon;
@@ -52,6 +56,7 @@ int MSG_QUEUE_SIZE = 10;
 int etatCommMoniteur = 1;
 int robotStarted = 0;
 char move = DMB_STOP_MOVE;
+Camera camera;
 
 /**
  * \fn void initStruct(void)
@@ -101,7 +106,11 @@ void initStruct(void) {
         printf("Error mutex create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
-
+    if (err = rt_mutex_create(&mutex_camera, NULL)) {
+        printf("Error mutex create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+    
     /* Creation du semaphore */
     if (err = rt_sem_create(&sem_barrier, NULL, 0, S_FIFO)) {
         printf("Error semaphore create: %s\n", strerror(-err));
@@ -116,6 +125,10 @@ void initStruct(void) {
         exit(EXIT_FAILURE);
     }
     if (err = rt_sem_create(&sem_startRobot, NULL, 0, S_FIFO)) {
+        printf("Error semaphore create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_sem_create(&sem_openCamera, NULL, 0, S_FIFO)) {
         printf("Error semaphore create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
@@ -142,6 +155,10 @@ void initStruct(void) {
         exit(EXIT_FAILURE);
     }
     if (err = rt_task_create(&th_move, "th_move", 0, PRIORITY_TMOVE, 0)) {
+        printf("Error task create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_task_create(&th_openCamera, "th_openCamera", 0, PRIORITY_TMOVE, 0)) {
         printf("Error task create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
@@ -179,6 +196,10 @@ void startTasks() {
         exit(EXIT_FAILURE);
     }
     if (err = rt_task_start(&th_server, &f_server, NULL)) {
+        printf("Error task start: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_task_start(&th_openCamera, &f_openCamera, NULL)) {
         printf("Error task start: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
