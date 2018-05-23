@@ -252,6 +252,49 @@ void f_openCamera(void *arg) {
     }
 }
 
+void f_sendImage(void *arg){
+     /* INIT */
+    RT_TASK_INFO info;
+    rt_task_inquire(NULL, &info);
+    printf("Init %s\n", info.name);
+    rt_sem_p(&sem_barrier, TM_INFINITE);
+    
+     /* PERIODIC START */
+#ifdef _WITH_TRACE_
+    printf("%s: start period\n", info.name);
+#endif
+    rt_task_set_periodic(NULL, TM_NOW, 100000000);
+    while (1) {
+#ifdef _WITH_TRACE_
+        printf("%s: Wait period \n", info.name);
+#endif
+        rt_task_wait_period(NULL);
+        
+        rt_mutex_acquire(&mutex_camera,TM_INFINITE);
+        bool camOpened = camera.isOpened();
+        rt_mutex_release(&mutex_camera);
+        
+        if(camOpened){
+            printf("cam opened \n");
+            Image image;
+            Jpg jpgImage;
+            rt_mutex_acquire(&mutex_camera,TM_INFINITE);
+            get_image(&camera,&image);
+            rt_mutex_release(&mutex_camera);
+            compress_image(&image,&jpgImage);
+            /*writing IMAGE in sendToMon queue doesn't work 
+            you have to send it directly with the monitor function
+            MessageToMon msg;
+            set_msgToMon_header(&msg,HEADER_STM_IMAGE);
+            set_msgToMon_data(&msg,&jpgImage);
+            write_in_queue(&q_messageToMon,msg);*/
+            send_message_to_monitor(HEADER_STM_IMAGE, &jpgImage);
+            
+        }
+       
+    }
+}
+
 void write_in_queue(RT_QUEUE *queue, MessageToMon msg) {
     void *buff;
     buff = rt_queue_alloc(&q_messageToMon, sizeof (MessageToMon));
