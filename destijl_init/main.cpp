@@ -27,6 +27,7 @@ RT_TASK th_startRobot;
 RT_TASK th_move;
 RT_TASK th_openCamera;
 RT_TASK th_sendImage;
+RT_TASK th_checkBattery;
 
 // Déclaration des priorités des taches
 int PRIORITY_TSERVER = 30;
@@ -37,6 +38,7 @@ int PRIORITY_TRECEIVEFROMMON = 22;
 int PRIORITY_TSTARTROBOT = 20;
 int PRIORITY_TOPENCAMERA = 20; // TODO define real priority 
 int PRIORITY_TSENDIMAGE = 20; // TODO define real priority 
+int PRIORITY_TCHECKBATTERY = 20;
 
 RT_MUTEX mutex_robotStarted;
 RT_MUTEX mutex_move;
@@ -160,11 +162,15 @@ void initStruct(void) {
         printf("Error task create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
-    if (err = rt_task_create(&th_openCamera, "th_openCamera", 0, PRIORITY_TMOVE, 0)) {
+    if (err = rt_task_create(&th_openCamera, "th_openCamera", 0, PRIORITY_TOPENCAMERA, 0)) {
         printf("Error task create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
-    if (err = rt_task_create(&th_sendImage, "th_sendImage", 0, PRIORITY_TMOVE, 0)) {
+    if (err = rt_task_create(&th_checkBattery, "th_checkBattery", 0, PRIORITY_TCHECKBATTERY, 0)) {
+        printf("Error task create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_task_create(&th_sendImage, "th_sendImage", 0, PRIORITY_TSENDIMAGE, 0)) {
         printf("Error task create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
@@ -213,10 +219,15 @@ void startTasks() {
         printf("Error task start: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
+    if (err = rt_task_start(&th_checkBattery, &f_checkBattery, NULL)) {
+        printf("Error task start: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
 }
 
 void deleteTasks() {
     rt_task_delete(&th_server);
     rt_task_delete(&th_openComRobot);
     rt_task_delete(&th_move);
+    rt_task_delete(&th_checkBattery);
 }

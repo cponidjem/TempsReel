@@ -295,6 +295,46 @@ void f_sendImage(void *arg){
     }
 }
 
+void f_checkBattery(void *arg) {
+    /* INIT */
+    int err;
+    RT_TASK_INFO info;
+    rt_task_inquire(NULL, &info);
+    printf("Init %s\n", info.name);
+    rt_sem_p(&sem_barrier, TM_INFINITE);
+
+    /* PERIODIC START */
+#ifdef _WITH_TRACE_
+    printf("%s: start period\n", info.name);
+#endif
+    rt_task_set_periodic(NULL, TM_NOW, 500000000);
+    while (1) {
+#ifdef _WITH_TRACE_
+        printf("%s: Wait period \n", info.name);
+#endif
+        rt_task_wait_period(NULL);
+#ifdef _WITH_TRACE_
+        printf("%s: Periodic activation\n", info.name);
+        printf("%s: battery equals %c\n", info.name, DMB_GET_VBAT);
+#endif
+        rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
+        if (robotStarted) {
+            err = send_command_to_robot(DMB_GET_VBAT)+48;
+        #ifdef _WITH_TRACE_
+            printf("%s : checkbattery\n", info.name);
+        #endif
+        #ifdef _WITH_TRACE_
+            printf("%s: is %c  \n", info.name, &err);
+        #endif  
+            MessageToMon msg;
+            set_msgToMon_header(&msg, HEADER_STM_BAT);
+            set_msgToMon_data(&msg, &err);
+            write_in_queue(&q_messageToMon, msg);      
+        }
+            rt_mutex_release(&mutex_robotStarted);       
+        }
+        
+    }
 void write_in_queue(RT_QUEUE *queue, MessageToMon msg) {
     void *buff;
     buff = rt_queue_alloc(&q_messageToMon, sizeof (MessageToMon));
