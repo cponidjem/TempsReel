@@ -269,13 +269,11 @@ void f_sendImage(void *arg){
         printf("%s: Wait period \n", info.name);
 #endif
         rt_task_wait_period(NULL);
-        
+#ifdef _WITH_TRACE_
+        printf("%s: Periodic activation\n", info.name);
+#endif        
         rt_mutex_acquire(&mutex_camera,TM_INFINITE);
-        bool camOpened = camera.isOpened();
-        rt_mutex_release(&mutex_camera);
-        
-        if(camOpened){
-            printf("cam opened \n");
+        if(camera.isOpened()){
             Image image;
             Jpg jpgImage;
             rt_mutex_acquire(&mutex_camera,TM_INFINITE);
@@ -289,9 +287,11 @@ void f_sendImage(void *arg){
             set_msgToMon_data(&msg,&jpgImage);
             write_in_queue(&q_messageToMon,msg);*/
             send_message_to_monitor(HEADER_STM_IMAGE, &jpgImage);
-            
+#ifdef _WITH_TRACE_
+    printf("%s: the image was sent\n", info.name);
+#endif            
         }
-       
+        rt_mutex_release(&mutex_camera);
     }
 }
 
@@ -315,26 +315,23 @@ void f_checkBattery(void *arg) {
         rt_task_wait_period(NULL);
 #ifdef _WITH_TRACE_
         printf("%s: Periodic activation\n", info.name);
-        printf("%s: battery equals %c\n", info.name, DMB_GET_VBAT);
 #endif
         rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
         if (robotStarted) {
             err = send_command_to_robot(DMB_GET_VBAT)+48;
-        #ifdef _WITH_TRACE_
-            printf("%s : checkbattery\n", info.name);
-        #endif
-        #ifdef _WITH_TRACE_
-            printf("%s: is %c  \n", info.name, &err);
-        #endif  
             MessageToMon msg;
             set_msgToMon_header(&msg, HEADER_STM_BAT);
             set_msgToMon_data(&msg, &err);
-            write_in_queue(&q_messageToMon, msg);      
+            write_in_queue(&q_messageToMon, msg);
+#ifdef _WITH_TRACE_
+    printf("%s: battery level %c was sent\n", info.name, &err);
+#endif 
         }
-            rt_mutex_release(&mutex_robotStarted);       
-        }
-        
+        rt_mutex_release(&mutex_robotStarted);       
     }
+        
+}
+
 void write_in_queue(RT_QUEUE *queue, MessageToMon msg) {
     void *buff;
     buff = rt_queue_alloc(&q_messageToMon, sizeof (MessageToMon));
