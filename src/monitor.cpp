@@ -94,7 +94,7 @@ int close_server(void) {
     return 0;
 }
 
-int send_message_to_monitor(const char* typeMessage, const void * data) {
+/*int send_message_to_monitor(const char* typeMessage, const void * data) {
     if ((string) typeMessage == HEADER_STM_IMAGE) {
         Jpg * imgC = (Jpg*) data;
         serverSend("IMG", 3);
@@ -130,6 +130,44 @@ int send_message_to_monitor(const char* typeMessage, const void * data) {
     } else {
         return -1;
     }
+}*/
+
+int send_message_to_monitor(const char* typeMessage, const void * data) {
+   if ((string) typeMessage == HEADER_STM_IMAGE) {
+        Jpg * imgC = (Jpg*) data;
+        if(serverSend("IMG", 3) && serverSend(imgC->data(), imgC->size()) && serverSend("TRAME", 5)) {
+            return 0;
+        } else {
+            return -1;
+        }        
+    } else if ((string) typeMessage == HEADER_STM_POS) {
+        char buffer[20];
+        Position * maPosition = (Position*) data;
+        sprintf(buffer, "POScenter: %3d;%3d | %.1fTRAME", maPosition->center.x, maPosition->center.y, maPosition->angle);
+        if(serverSend(buffer, strlen(buffer))){
+            return 0;
+        } else {
+            return -1;
+        }
+    } else {
+        char buffer[50];
+       if ((string) typeMessage == HEADER_STM_MES) {           
+            sprintf(buffer, "MSG%sTRAME", (const char*) data);
+        } else if ((string) typeMessage == HEADER_STM_ACK) {
+            sprintf(buffer, "ACK%sTRAME", (const char*) data);
+        } else if ((string) typeMessage == HEADER_STM_BAT) {
+            sprintf(buffer, "BAT%sTRAME", (const char*) data);
+        } else if ((string) typeMessage == HEADER_STM_NO_ACK) {
+            sprintf(buffer, "NAK%sTRAME", (const char*) data);   
+        } else {
+            return -1;
+        }
+        if(serverSend(buffer, strlen(buffer))){
+            return 0;
+        } else {
+            return -1;
+        }
+    }           
 }
 
 int receive_message_from_monitor(char *typeMessage, char *data) {

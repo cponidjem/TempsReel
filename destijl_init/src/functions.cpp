@@ -50,7 +50,16 @@ void f_sendToMon(void * arg) {
             printf("%s : message {%s,%s} in queue\n", info.name, msg.header, msg.data);
 #endif
 
-            send_message_to_monitor(msg.header, msg.data);
+            err = send_message_to_monitor(msg.header, msg.data);
+            if(err < 0) {
+                rt_mutex_acquire(&mutex_nodeJSLoss,TM_INFINITE);
+                if(!nodeJSLoss) {
+                    nodeJSLoss = true;
+                    rt_sem_v(&sem_nodeJSLoss);
+                }               
+                rt_mutex_release(&mutex_nodeJSLoss);
+                
+            }
             free_msgToMon_data(&msg);
             rt_queue_free(&q_messageToMon, &msg);
         } else {
@@ -81,41 +90,49 @@ void f_receiveFromMon(void *arg) {
 #ifdef _WITH_TRACE_
         printf("%s: msg {header:%s,data=%s} received from UI\n", info.name, msg.header, msg.data);
 #endif
-        if (strcmp(msg.header, HEADER_MTS_COM_DMB) == 0) {
-            if (msg.data[0] == OPEN_COM_DMB) { // Open communication supervisor-robot
-#ifdef _WITH_TRACE_
-                printf("%s: message open Xbee communication\n", info.name);
-#endif
-                rt_sem_v(&sem_openComRobot);
-            }
-        } else if (strcmp(msg.header, HEADER_MTS_DMB_ORDER) == 0) {
-            if (msg.data[0] == DMB_START_WITHOUT_WD) { // Start robot
-#ifdef _WITH_TRACE_
-                printf("%s: message start robot\n", info.name);
-#endif 
-                rt_sem_v(&sem_startRobot);
-
-            } else if ((msg.data[0] == DMB_GO_BACK)
-                    || (msg.data[0] == DMB_GO_FORWARD)
-                    || (msg.data[0] == DMB_GO_LEFT)
-                    || (msg.data[0] == DMB_GO_RIGHT)
-                    || (msg.data[0] == DMB_STOP_MOVE)) {
-
-                rt_mutex_acquire(&mutex_move, TM_INFINITE);
-                move = msg.data[0];
-                rt_mutex_release(&mutex_move);
-#ifdef _WITH_TRACE_
-                printf("%s: message update movement with %c\n", info.name, move);
-#endif
-
-            }
-        } else if (strcmp(msg.header, HEADER_MTS_CAMERA) == 0){
-            if(msg.data[0] == CAM_OPEN) {
-                rt_sem_v(&sem_openCamera);
-            } else if (msg.data[0] == CAM_CLOSE) {
-                //TODO close camera
-            }
+        if (err <= 0) {
+            rt_mutex_acquire(&mutex_nodeJSLoss,TM_INFINITE);
+            nodeJSLoss = true;
+            rt_mutex_release(&mutex_nodeJSLoss);
+            rt_sem_v(&sem_nodeJSLoss);
+        } else {
         
+            if (strcmp(msg.header, HEADER_MTS_COM_DMB) == 0) {
+                if (msg.data[0] == OPEN_COM_DMB) { // Open communication supervisor-robot
+    #ifdef _WITH_TRACE_
+                    printf("%s: message open Xbee communication\n", info.name);
+    #endif
+                    rt_sem_v(&sem_openComRobot);
+                }
+            } else if (strcmp(msg.header, HEADER_MTS_DMB_ORDER) == 0) {
+                if (msg.data[0] == DMB_START_WITHOUT_WD) { // Start robot
+    #ifdef _WITH_TRACE_
+                    printf("%s: message start robot\n", info.name);
+    #endif 
+                    rt_sem_v(&sem_startRobot);
+
+                } else if ((msg.data[0] == DMB_GO_BACK)
+                        || (msg.data[0] == DMB_GO_FORWARD)
+                        || (msg.data[0] == DMB_GO_LEFT)
+                        || (msg.data[0] == DMB_GO_RIGHT)
+                        || (msg.data[0] == DMB_STOP_MOVE)) {
+
+                    rt_mutex_acquire(&mutex_move, TM_INFINITE);
+                    move = msg.data[0];
+                    rt_mutex_release(&mutex_move);
+    #ifdef _WITH_TRACE_
+                    printf("%s: message update movement with %c\n", info.name, move);
+    #endif
+
+                }
+            } else if (strcmp(msg.header, HEADER_MTS_CAMERA) == 0){
+                if(msg.data[0] == CAM_OPEN) {
+                    rt_sem_v(&sem_openCamera);
+                } else if (msg.data[0] == CAM_CLOSE) {
+                    //TODO close camera
+                }
+
+            }
         }
     } while (err > 0);
 
@@ -221,6 +238,23 @@ void f_move(void *arg) {
 #endif            
         }
         rt_mutex_release(&mutex_robotStarted);
+    }
+}
+
+void f_detectNodeJSLoss(void *arg){
+     /* INIT */
+    RT_TASK_INFO info;
+    rt_task_inquire(NULL, &info);
+    printf("Init %s\n", info.name);
+    rt_sem_p(&sem_barrier, TM_INFINITE);
+    
+    while(1){
+        rt_sem_p(&sem_nodeJSLoss, TM_INFINITE);
+        rt_mutex_acquire(&mutex_nodeJSLoss,TM_INFINITE);
+        if (nodeJSLoss) {
+            printf("La communication avec NodeJS a été perdue \n");
+        }
+        rt_mutex_release(&mutex_nodeJSLoss);
     }
 }
 

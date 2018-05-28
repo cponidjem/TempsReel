@@ -28,6 +28,7 @@ RT_TASK th_move;
 RT_TASK th_openCamera;
 RT_TASK th_sendImage;
 RT_TASK th_checkBattery;
+RT_TASK th_detectNodeJSLoss;
 
 // Déclaration des priorités des taches
 int PRIORITY_TSERVER = 30;
@@ -38,11 +39,13 @@ int PRIORITY_TRECEIVEFROMMON = 22;
 int PRIORITY_TSTARTROBOT = 20;
 int PRIORITY_TOPENCAMERA = 20; // TODO define real priority 
 int PRIORITY_TSENDIMAGE = 20; // TODO define real priority 
-int PRIORITY_TCHECKBATTERY = 20;
+int PRIORITY_TCHECKBATTERY = 20; // TODO define real priority 
+int PRIORITY_TDETECTNODEJSLOSS = 20; // TODO define real priority 
 
 RT_MUTEX mutex_robotStarted;
 RT_MUTEX mutex_move;
 RT_MUTEX mutex_camera;
+RT_MUTEX mutex_nodeJSLoss;
 
 // Déclaration des sémaphores
 RT_SEM sem_barrier;
@@ -50,6 +53,7 @@ RT_SEM sem_openComRobot;
 RT_SEM sem_serverOk;
 RT_SEM sem_startRobot;
 RT_SEM sem_openCamera;
+RT_SEM sem_nodeJSLoss;
 
 // Déclaration des files de message
 RT_QUEUE q_messageToMon;
@@ -61,6 +65,7 @@ int etatCommMoniteur = 1;
 int robotStarted = 0;
 char move = DMB_STOP_MOVE;
 Camera camera;
+bool nodeJSLoss = false;
 
 /**
  * \fn void initStruct(void)
@@ -114,6 +119,10 @@ void initStruct(void) {
         printf("Error mutex create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
+    if (err = rt_mutex_create(&mutex_nodeJSLoss, NULL)) {
+        printf("Error mutex create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
     
     /* Creation du semaphore */
     if (err = rt_sem_create(&sem_barrier, NULL, 0, S_FIFO)) {
@@ -133,6 +142,10 @@ void initStruct(void) {
         exit(EXIT_FAILURE);
     }
     if (err = rt_sem_create(&sem_openCamera, NULL, 0, S_FIFO)) {
+        printf("Error semaphore create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_sem_create(&sem_nodeJSLoss, NULL, 0, S_FIFO)) {
         printf("Error semaphore create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
@@ -171,6 +184,10 @@ void initStruct(void) {
         exit(EXIT_FAILURE);
     }
     if (err = rt_task_create(&th_sendImage, "th_sendImage", 0, PRIORITY_TSENDIMAGE, 0)) {
+        printf("Error task create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_task_create(&th_detectNodeJSLoss, "th_detectNodeJSLoss", 0, PRIORITY_TDETECTNODEJSLOSS, 0)) {
         printf("Error task create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
@@ -220,6 +237,10 @@ void startTasks() {
         exit(EXIT_FAILURE);
     }
     if (err = rt_task_start(&th_checkBattery, &f_checkBattery, NULL)) {
+        printf("Error task start: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+     if (err = rt_task_start(&th_detectNodeJSLoss, &f_detectNodeJSLoss, NULL)) {
         printf("Error task start: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
