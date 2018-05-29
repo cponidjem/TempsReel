@@ -29,6 +29,7 @@ RT_TASK th_openCamera;
 RT_TASK th_sendImage;
 RT_TASK th_checkBattery;
 RT_TASK th_detectNodeJSLoss;
+RT_TASK th_findArena;
 
 // Déclaration des priorités des taches
 int PRIORITY_TSERVER = 30;
@@ -41,11 +42,14 @@ int PRIORITY_TOPENCAMERA = 20; // TODO define real priority
 int PRIORITY_TSENDIMAGE = 20; // TODO define real priority 
 int PRIORITY_TCHECKBATTERY = 20; // TODO define real priority 
 int PRIORITY_TDETECTNODEJSLOSS = 20; // TODO define real priority 
+int PRIORITY_TFINDARENA = 20; // TODO define real priority 
 
 RT_MUTEX mutex_robotStarted;
 RT_MUTEX mutex_move;
 RT_MUTEX mutex_camera;
 RT_MUTEX mutex_nodeJSLoss;
+RT_MUTEX mutex_periodicImage;
+RT_MUTEX mutex_savedArena;
 
 // Déclaration des sémaphores
 RT_SEM sem_barrier;
@@ -54,9 +58,11 @@ RT_SEM sem_serverOk;
 RT_SEM sem_startRobot;
 RT_SEM sem_openCamera;
 RT_SEM sem_nodeJSLoss;
+RT_SEM sem_findArena;
 
 // Déclaration des files de message
 RT_QUEUE q_messageToMon;
+RT_QUEUE q_confirmArena;
 
 int MSG_QUEUE_SIZE = 10;
 
@@ -66,6 +72,8 @@ int robotStarted = 0;
 char move = DMB_STOP_MOVE;
 Camera camera;
 bool nodeJSLoss = false;
+bool periodicImage = true;
+Arene savedArena;
 
 /**
  * \fn void initStruct(void)
@@ -123,6 +131,10 @@ void initStruct(void) {
         printf("Error mutex create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
+    if (err = rt_mutex_create(&mutex_periodicImage, NULL)) {
+        printf("Error mutex create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
     
     /* Creation du semaphore */
     if (err = rt_sem_create(&sem_barrier, NULL, 0, S_FIFO)) {
@@ -146,6 +158,10 @@ void initStruct(void) {
         exit(EXIT_FAILURE);
     }
     if (err = rt_sem_create(&sem_nodeJSLoss, NULL, 0, S_FIFO)) {
+        printf("Error semaphore create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_sem_create(&sem_findArena, NULL, 0, S_FIFO)) {
         printf("Error semaphore create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
@@ -187,13 +203,21 @@ void initStruct(void) {
         printf("Error task create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
+    if (err = rt_task_create(&th_findArena, "th_findArena", 0, PRIORITY_TFINDARENA, 0)) {
+        printf("Error task create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
     if (err = rt_task_create(&th_detectNodeJSLoss, "th_detectNodeJSLoss", 0, PRIORITY_TDETECTNODEJSLOSS, 0)) {
         printf("Error task create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
 
     /* Creation des files de messages */
-    if (err = rt_queue_create(&q_messageToMon, "toto", MSG_QUEUE_SIZE * sizeof (MessageToRobot), MSG_QUEUE_SIZE, Q_FIFO)) {
+    if (err = rt_queue_create(&q_messageToMon, "messageToMon", MSG_QUEUE_SIZE * sizeof (MessageToMon), MSG_QUEUE_SIZE, Q_FIFO)) {
+        printf("Error msg queue create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_queue_create(&q_confirmArena, "confirmArena", MSG_QUEUE_SIZE * sizeof (bool), MSG_QUEUE_SIZE, Q_FIFO)) {
         printf("Error msg queue create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
@@ -233,6 +257,10 @@ void startTasks() {
         exit(EXIT_FAILURE);
     }
      if (err = rt_task_start(&th_sendImage, &f_sendImage, NULL)) {
+        printf("Error task start: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+     if (err = rt_task_start(&th_findArena, &f_findArena, NULL)) {
         printf("Error task start: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }

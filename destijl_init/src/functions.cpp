@@ -3,6 +3,7 @@
 char mode_start;
 
 void write_in_queue(RT_QUEUE *, MessageToMon);
+void confirmArena(RT_QUEUE*, bool);
 
 void f_server(void *arg) {
     int err;
@@ -45,7 +46,7 @@ void f_sendToMon(void * arg) {
 #ifdef _WITH_TRACE_
         printf("%s : waiting for a message in queue\n", info.name);
 #endif
-        if (rt_queue_read(&q_messageToMon, &msg, sizeof (MessageToRobot), TM_INFINITE) >= 0) {
+        if (rt_queue_read(&q_messageToMon, &msg, sizeof (MessageToMon), TM_INFINITE) >= 0) {
 #ifdef _WITH_TRACE_
             printf("%s : message {%s,%s} in queue\n", info.name, msg.header, msg.data);
 #endif
@@ -129,7 +130,19 @@ void f_receiveFromMon(void *arg) {
                 if(msg.data[0] == CAM_OPEN) {
                     rt_sem_v(&sem_openCamera);
                 } else if (msg.data[0] == CAM_CLOSE) {
-                    //TODO close camera
+                    rt_mutex_acquire(&mutex_camera, TM_INFINITE);
+                    close_camera(&camera);
+                    rt_mutex_release(&mutex_camera);
+                    MessageToMon msg;
+                    set_msgToMon_header(&msg, HEADER_STM_ACK);
+                    write_in_queue(&q_messageToMon, msg);
+                    
+                } else if (msg.data[0] == CAM_ASK_ARENA) {
+                    rt_sem_v(&sem_findArena);
+                } else if (msg.data[0] == CAM_ARENA_CONFIRM) {
+                    confirmArena(&q_confirmArena, true); 
+                } else if (msg.data[0] == CAM_ARENA_INFIRM) {
+                    confirmArena(&q_confirmArena, false); 
                 }
 
             }
@@ -305,14 +318,20 @@ void f_sendImage(void *arg){
         rt_task_wait_period(NULL);
 #ifdef _WITH_TRACE_
         printf("%s: Periodic activation\n", info.name);
-#endif        
+#endif  
+        rt_mutex_acquire(&mutex_periodicImage,TM_INFINITE);
         rt_mutex_acquire(&mutex_camera,TM_INFINITE);
-        if(camera.isOpened()){
+        if(camera.isOpened() && periodicImage){
             Image image;
             Jpg jpgImage;
             rt_mutex_acquire(&mutex_camera,TM_INFINITE);
             get_image(&camera,&image);
             rt_mutex_release(&mutex_camera);
+            rt_mutex_acquire(&mutex_savedArena,TM_INFINITE);
+            if(savedArena.area()>0){
+                 draw_arena(&image,&image,&savedArena);
+            }
+            rt_mutex_release(&mutex_savedArena);
             compress_image(&image,&jpgImage);
             /*writing IMAGE in sendToMon queue doesn't work 
             you have to send it directly with the monitor function
@@ -326,6 +345,55 @@ void f_sendImage(void *arg){
 #endif            
         }
         rt_mutex_release(&mutex_camera);
+        rt_mutex_release(&mutex_periodicImage);
+    }
+}
+
+void f_findArena(void *arg){
+    int err;
+    bool arenaOk;
+    Image image;
+    Jpg jpgImage;
+    Arene arena;
+    
+     /* INIT */
+    RT_TASK_INFO info;
+    rt_task_inquire(NULL, &info);
+    printf("Init %s\n", info.name);
+    rt_sem_p(&sem_barrier, TM_INFINITE);
+    
+    while(1){
+        rt_sem_p(&sem_findArena, TM_INFINITE);
+        rt_mutex_acquire(&mutex_periodicImage,TM_INFINITE);
+        periodicImage = false;
+        rt_mutex_release(&mutex_periodicImage);
+        rt_mutex_acquire(&mutex_camera,TM_INFINITE);
+        if(camera.isOpened()){
+            get_image(&camera,&image);
+        }        
+        rt_mutex_release(&mutex_camera);
+        err= detect_arena(&image,&arena);
+        if(err == 0){
+            draw_arena(&image,&image,&arena);
+            compress_image(&image,&jpgImage);
+            send_message_to_monitor(HEADER_STM_IMAGE,&jpgImage);
+            if (rt_queue_read(&q_confirmArena, &arenaOk, sizeof (bool), TM_INFINITE) >= 0) {
+                if(arenaOk){
+                    rt_mutex_acquire(&mutex_savedArena,TM_INFINITE);
+                    savedArena = arena;
+                    rt_mutex_release(&mutex_savedArena);
+                }
+            } else {
+                printf("Error msg queue write: %s\n", strerror(-err));
+            }
+        } else {
+            MessageToMon msg;
+            set_msgToMon_header(&msg, HEADER_STM_NO_ACK);
+            write_in_queue(&q_messageToMon, msg);
+        }      
+        rt_mutex_acquire(&mutex_periodicImage,TM_INFINITE);
+        periodicImage = true;
+        rt_mutex_release(&mutex_periodicImage);
     }
 }
 
@@ -366,9 +434,16 @@ void f_checkBattery(void *arg) {
         
 }
 
+void confirmArena(RT_QUEUE *queue, bool arenaOk){
+    void *buff;
+    buff = rt_queue_alloc(&q_messageToMon, sizeof (bool));
+    memcpy(buff, &arenaOk, sizeof (bool));
+    rt_queue_send(queue, buff, sizeof (bool), Q_NORMAL);
+}
+
 void write_in_queue(RT_QUEUE *queue, MessageToMon msg) {
     void *buff;
-    buff = rt_queue_alloc(&q_messageToMon, sizeof (MessageToMon));
+    buff = rt_queue_alloc(queue, sizeof (MessageToMon));
     memcpy(buff, &msg, sizeof (MessageToMon));
-    rt_queue_send(&q_messageToMon, buff, sizeof (MessageToMon), Q_NORMAL);
+    rt_queue_send(queue, buff, sizeof (MessageToMon), Q_NORMAL);
 }
