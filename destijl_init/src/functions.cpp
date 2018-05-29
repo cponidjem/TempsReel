@@ -143,6 +143,14 @@ void f_receiveFromMon(void *arg) {
                     confirmArena(&q_confirmArena, true); 
                 } else if (msg.data[0] == CAM_ARENA_INFIRM) {
                     confirmArena(&q_confirmArena, false); 
+                } else if (msg.data[0] == CAM_COMPUTE_POSITION) {
+                    rt_mutex_acquire(&mutex_continueDetectPos, TM_INFINITE);
+                    continueDetectPos = true;
+                    rt_mutex_release(&mutex_continueDetectPos);
+                } else if (msg.data[0] == CAM_STOP_COMPUTE_POSITION) {
+                    rt_mutex_acquire(&mutex_continueDetectPos, TM_INFINITE);
+                    continueDetectPos = false;
+                    rt_mutex_release(&mutex_continueDetectPos);
                 }
 
             }
@@ -300,6 +308,8 @@ void f_openCamera(void *arg) {
 }
 
 void f_sendImage(void *arg){
+    Arene arena;
+    Position tabPosition[10];
      /* INIT */
     RT_TASK_INFO info;
     rt_task_inquire(NULL, &info);
@@ -324,14 +334,35 @@ void f_sendImage(void *arg){
         if(camera.isOpened() && periodicImage){
             Image image;
             Jpg jpgImage;
-            rt_mutex_acquire(&mutex_camera,TM_INFINITE);
             get_image(&camera,&image);
-            rt_mutex_release(&mutex_camera);
             rt_mutex_acquire(&mutex_savedArena,TM_INFINITE);
-            if(savedArena.area()>0){
-                 draw_arena(&image,&image,&savedArena);
-            }
+            arena = savedArena;
             rt_mutex_release(&mutex_savedArena);
+            rt_mutex_acquire(&mutex_continueDetectPos, TM_INFINITE);
+            if(continueDetectPos){
+                if(arena.area()>0){
+                    MessageToMon msg;
+                    set_msgToMon_header(&msg,HEADER_STM_POS);
+                    if(detect_position(&image,tabPosition,&arena)){
+                        draw_position(&image,&image,&tabPosition[0]);
+                        set_msgToMon_data(&msg,&tabPosition[0]);
+                    } else {
+                        
+                        Position position;
+                        position.center.x = -1;
+                        position.center.y = -1;
+                        position.angle = -1;
+                        set_msgToMon_data(&msg,&position);                        
+                    }
+                    write_in_queue(&q_messageToMon,msg);
+                }  
+                
+            }
+            rt_mutex_release(&mutex_continueDetectPos);
+            if(arena.area()>0){
+                 draw_arena(&image,&image,&arena);
+            }   
+            
             compress_image(&image,&jpgImage);
             /*writing IMAGE in sendToMon queue doesn't work 
             you have to send it directly with the monitor function

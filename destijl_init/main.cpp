@@ -50,6 +50,7 @@ RT_MUTEX mutex_camera;
 RT_MUTEX mutex_nodeJSLoss;
 RT_MUTEX mutex_periodicImage;
 RT_MUTEX mutex_savedArena;
+RT_MUTEX mutex_continueDetectPos;
 
 // Déclaration des sémaphores
 RT_SEM sem_barrier;
@@ -74,6 +75,7 @@ Camera camera;
 bool nodeJSLoss = false;
 bool periodicImage = true;
 Arene savedArena;
+bool continueDetectPos = false;
 
 /**
  * \fn void initStruct(void)
@@ -132,6 +134,14 @@ void initStruct(void) {
         exit(EXIT_FAILURE);
     }
     if (err = rt_mutex_create(&mutex_periodicImage, NULL)) {
+        printf("Error mutex create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_mutex_create(&mutex_savedArena, NULL)) {
+        printf("Error mutex create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_mutex_create(&mutex_continueDetectPos, NULL)) {
         printf("Error mutex create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
