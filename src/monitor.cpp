@@ -159,6 +159,8 @@ int send_message_to_monitor(const char* typeMessage, const void * data) {
             sprintf(buffer, "BAT%sTRAME", (const char*) data);
         } else if ((string) typeMessage == HEADER_STM_NO_ACK) {
             sprintf(buffer, "NAK%sTRAME", (const char*) data);   
+        } else if ((string) typeMessage == HEADER_STM_LOST_DMB) {
+            sprintf(buffer, "LCD%sTRAME", (const char*) data);   
         } else {
             return -1;
         }

@@ -4,6 +4,7 @@ char mode_start;
 
 void write_in_queue(RT_QUEUE *, MessageToMon);
 void confirmArena(RT_QUEUE*, bool);
+void f_detectRobotLoss(int err);
 
 void f_server(void *arg) {
     int err;
@@ -210,6 +211,7 @@ void f_startRobot(void * arg) {
         printf("%s : sem_startRobot arrived => Start robot\n", info.name);
 #endif
         err = send_command_to_robot(DMB_START_WITHOUT_WD);
+        f_detectRobotLoss(err);
         if (err == 0) {
 #ifdef _WITH_TRACE_
             printf("%s : the robot is started\n", info.name);
@@ -217,6 +219,7 @@ void f_startRobot(void * arg) {
             rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
             robotStarted = 1;
             rt_mutex_release(&mutex_robotStarted);
+           
             MessageToMon msg;
             set_msgToMon_header(&msg, HEADER_STM_ACK);
             write_in_queue(&q_messageToMon, msg);
@@ -230,6 +233,7 @@ void f_startRobot(void * arg) {
 
 void f_move(void *arg) {
     /* INIT */
+    int err;
     RT_TASK_INFO info;
     rt_task_inquire(NULL, &info);
     printf("Init %s\n", info.name);
@@ -252,8 +256,9 @@ void f_move(void *arg) {
         rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
         if (robotStarted) {
             rt_mutex_acquire(&mutex_move, TM_INFINITE);
-            send_command_to_robot(move);
+            err = send_command_to_robot(move);
             rt_mutex_release(&mutex_move);
+            f_detectRobotLoss(err);
 #ifdef _WITH_TRACE_
             printf("%s: the movement %c was sent\n", info.name, move);
 #endif            
@@ -430,6 +435,7 @@ void f_findArena(void *arg){
 
 void f_checkBattery(void *arg) {
     /* INIT */
+    int err1;
     int err;
     RT_TASK_INFO info;
     rt_task_inquire(NULL, &info);
@@ -451,7 +457,9 @@ void f_checkBattery(void *arg) {
 #endif
         rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
         if (robotStarted) {
-            err = send_command_to_robot(DMB_GET_VBAT)+48;
+            err1 = send_command_to_robot(DMB_GET_VBAT);
+            err = err1 + 48;
+            f_detectRobotLoss(err1);
             MessageToMon msg;
             set_msgToMon_header(&msg, HEADER_STM_BAT);
             set_msgToMon_data(&msg, &err);
@@ -472,6 +480,34 @@ void confirmArena(RT_QUEUE *queue, bool arenaOk){
     rt_queue_send(queue, buff, sizeof (bool), Q_NORMAL);
 }
 
+void f_detectRobotLoss(int err){     
+           
+    if(err>=0){
+         rt_mutex_acquire(&mutex_compteur, TM_INFINITE);
+        cpt=0;
+         rt_mutex_release(&mutex_compteur);
+#ifdef _WITH_TRACE_
+    printf("compteur = %d \n", cpt);
+#endif          
+    }else{ 
+        
+        
+#ifdef _WITH_TRACE_
+    printf("compteur = %d \n", cpt);
+#endif 
+        rt_mutex_acquire(&mutex_compteur, TM_INFINITE);
+        if(cpt==3){
+           MessageToMon msg;
+           set_msgToMon_header(&msg, HEADER_STM_LOST_DMB);
+           write_in_queue(&q_messageToMon, msg);
+           close_communication_robot();
+           robotStarted=0;
+        }else{
+            cpt++;
+        }
+        rt_mutex_release(&mutex_compteur);
+    }       
+}
 void write_in_queue(RT_QUEUE *queue, MessageToMon msg) {
     void *buff;
     buff = rt_queue_alloc(queue, sizeof (MessageToMon));

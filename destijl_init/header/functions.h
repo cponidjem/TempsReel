@@ -49,6 +49,7 @@ extern RT_MUTEX mutex_nodeJSLoss;
 extern RT_MUTEX mutex_periodicImage;
 extern RT_MUTEX mutex_savedArena;
 extern RT_MUTEX mutex_continueDetectPos;
+extern RT_MUTEX mutex_compteur;
 
 extern RT_SEM sem_barrier;
 extern RT_SEM sem_openComRobot;
@@ -69,6 +70,7 @@ extern bool nodeJSLoss;
 extern bool periodicImage;
 extern Arene savedArena;
 extern bool continueDetectPos;
+extern int cpt;
 
 extern int MSG_QUEUE_SIZE;
 

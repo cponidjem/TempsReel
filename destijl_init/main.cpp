@@ -51,6 +51,7 @@ RT_MUTEX mutex_nodeJSLoss;
 RT_MUTEX mutex_periodicImage;
 RT_MUTEX mutex_savedArena;
 RT_MUTEX mutex_continueDetectPos;
+RT_MUTEX mutex_compteur;
 
 // Déclaration des sémaphores
 RT_SEM sem_barrier;
@@ -76,6 +77,7 @@ bool nodeJSLoss = false;
 bool periodicImage = true;
 Arene savedArena;
 bool continueDetectPos = false;
+int cpt=0;
 
 /**
  * \fn void initStruct(void)
@@ -142,6 +144,10 @@ void initStruct(void) {
         exit(EXIT_FAILURE);
     }
     if (err = rt_mutex_create(&mutex_continueDetectPos, NULL)) {
+        printf("Error mutex create: %s\n", strerror(-err));
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_mutex_create(&mutex_compteur, NULL)) {
         printf("Error mutex create: %s\n", strerror(-err));
         exit(EXIT_FAILURE);
     }
