@@ -8,6 +8,7 @@ void f_detectRobotLoss(int err);
 
 void f_server(void *arg) {
     int err;
+    
     /* INIT */
     RT_TASK_INFO info;
     rt_task_inquire(NULL, &info);
@@ -232,8 +233,9 @@ void f_startRobot(void * arg) {
 }
 
 void f_move(void *arg) {
-    /* INIT */
     int err;
+    
+    /* INIT */
     RT_TASK_INFO info;
     rt_task_inquire(NULL, &info);
     printf("Init %s\n", info.name);
@@ -268,6 +270,8 @@ void f_move(void *arg) {
 }
 
 void f_detectNodeJSLoss(void *arg){
+    int err;
+    
      /* INIT */
     RT_TASK_INFO info;
     rt_task_inquire(NULL, &info);
@@ -279,6 +283,15 @@ void f_detectNodeJSLoss(void *arg){
         rt_mutex_acquire(&mutex_nodeJSLoss,TM_INFINITE);
         if (nodeJSLoss) {
             printf("La communication avec NodeJS a été perdue \n");
+            close_communication_robot();
+            rt_mutex_acquire(&mutex_robotStarted,TM_INFINITE);
+            robotStarted = 0;
+            rt_mutex_release(&mutex_robotStarted);
+            rt_mutex_acquire(&mutex_camera,TM_INFINITE);
+            close_camera(&camera);
+            rt_mutex_release(&mutex_camera);
+            close_server();
+            kill_nodejs();            
         }
         rt_mutex_release(&mutex_nodeJSLoss);
     }
@@ -315,6 +328,7 @@ void f_openCamera(void *arg) {
 void f_sendImage(void *arg){
     Arene arena;
     Position tabPosition[10];
+    
      /* INIT */
     RT_TASK_INFO info;
     rt_task_inquire(NULL, &info);
@@ -351,12 +365,10 @@ void f_sendImage(void *arg){
                     if(detect_position(&image,tabPosition,&arena)){
                         draw_position(&image,&image,&tabPosition[0]);
                         set_msgToMon_data(&msg,&tabPosition[0]);
-                    } else {
-                        
+                    } else {                        
                         Position position;
                         position.center.x = -1;
                         position.center.y = -1;
-                        position.angle = -1;
                         set_msgToMon_data(&msg,&position);                        
                     }
                     write_in_queue(&q_messageToMon,msg);
@@ -419,6 +431,7 @@ void f_findArena(void *arg){
                     savedArena = arena;
                     rt_mutex_release(&mutex_savedArena);
                 }
+                rt_queue_free(&q_confirmArena, &arenaOk);
             } else {
                 printf("Error msg queue write: %s\n", strerror(-err));
             }
@@ -434,9 +447,10 @@ void f_findArena(void *arg){
 }
 
 void f_checkBattery(void *arg) {
-    /* INIT */
     int err1;
     int err;
+    
+    /* INIT */
     RT_TASK_INFO info;
     rt_task_inquire(NULL, &info);
     printf("Init %s\n", info.name);
@@ -473,13 +487,6 @@ void f_checkBattery(void *arg) {
         
 }
 
-void confirmArena(RT_QUEUE *queue, bool arenaOk){
-    void *buff;
-    buff = rt_queue_alloc(&q_messageToMon, sizeof (bool));
-    memcpy(buff, &arenaOk, sizeof (bool));
-    rt_queue_send(queue, buff, sizeof (bool), Q_NORMAL);
-}
-
 void f_detectRobotLoss(int err){     
            
     if(err>=0){
@@ -508,6 +515,14 @@ void f_detectRobotLoss(int err){
         rt_mutex_release(&mutex_compteur);
     }       
 }
+
+void confirmArena(RT_QUEUE *queue, bool arenaOk){
+    void *buff;
+    buff = rt_queue_alloc(queue, sizeof (bool));
+    memcpy(buff, &arenaOk, sizeof (bool));
+    rt_queue_send(queue, buff, sizeof (bool), Q_NORMAL);
+}
+
 void write_in_queue(RT_QUEUE *queue, MessageToMon msg) {
     void *buff;
     buff = rt_queue_alloc(queue, sizeof (MessageToMon));
