@@ -143,7 +143,11 @@ int send_message_to_monitor(const char* typeMessage, const void * data) {
     } else if ((string) typeMessage == HEADER_STM_POS) {
         char buffer[20];
         Position * maPosition = (Position*) data;
-        sprintf(buffer, "POScenter: %3d;%3d | %.1fTRAME", maPosition->center.x, maPosition->center.y, maPosition->angle);
+        if (!maPosition->center.x && !maPosition->center.y){
+            sprintf(buffer, "POScenter: %3d;%3d | %.1fTRAME", maPosition->center.x-1, maPosition->center.y-1, maPosition->angle-1);
+        } else {
+            sprintf(buffer, "POScenter: %3d;%3d | %.1fTRAME", maPosition->center.x, maPosition->center.y, maPosition->angle);
+        }
         if(serverSend(buffer, strlen(buffer))){
             return 0;
         } else {

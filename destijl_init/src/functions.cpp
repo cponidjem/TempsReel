@@ -360,18 +360,14 @@ void f_sendImage(void *arg){
             rt_mutex_acquire(&mutex_continueDetectPos, TM_INFINITE);
             if(continueDetectPos){
                 if(arena.area()>0){
-                    MessageToMon msg;
-                    set_msgToMon_header(&msg,HEADER_STM_POS);
+                    
                     if(detect_position(&image,tabPosition,&arena)){
                         draw_position(&image,&image,&tabPosition[0]);
-                        set_msgToMon_data(&msg,&tabPosition[0]);
+                        send_message_to_monitor(HEADER_STM_POS,&tabPosition[0]);
                     } else {                        
-                        Position position;
-                        position.center.x = -1;
-                        position.center.y = -1;
-                        set_msgToMon_data(&msg,&position);                        
+                        send_message_to_monitor(HEADER_STM_POS,&tabPosition[-1]);                        
                     }
-                    write_in_queue(&q_messageToMon,msg);
+                    
                 }  
                 
             }
